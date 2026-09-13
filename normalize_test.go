@@ -108,6 +108,36 @@ func TestNormalizeValue(t *testing.T) {
 		{"A is lowercased", "A", "192.0.2.1", "192.0.2.1"},
 		{"AAAA is lowercased", "AAAA", "2001:DB8::1", "2001:db8::1"},
 		{"unknown type passes through trimmed", "SRV", "  0 5 5060 sip.example.com  ", "0 5 5060 sip.example.com"},
+		{
+			"SOA normalizes hosts and timing fields",
+			"SOA",
+			"NS1.Example.com. Admin.Example.com. 2024010101 1h 30m 604800 1d",
+			"ns1.example.com. admin.example.com. 2024010101 3600 1800 604800 86400",
+		},
+		{
+			"SOA with wrong field count is untouched",
+			"SOA",
+			"ns1.example.com. admin.example.com. 2024010101 3600 900",
+			"ns1.example.com. admin.example.com. 2024010101 3600 900",
+		},
+		{
+			"SOA with unparseable serial is untouched",
+			"SOA",
+			"ns1.example.com. admin.example.com. abc 3600 900 604800 86400",
+			"ns1.example.com. admin.example.com. abc 3600 900 604800 86400",
+		},
+		{
+			"SOA with negative serial is untouched",
+			"SOA",
+			"ns1.example.com. admin.example.com. -1 3600 900 604800 86400",
+			"ns1.example.com. admin.example.com. -1 3600 900 604800 86400",
+		},
+		{
+			"SOA with unparseable timing field is untouched",
+			"SOA",
+			"ns1.example.com. admin.example.com. 2024010101 3600 900 604800 tomorrow",
+			"ns1.example.com. admin.example.com. 2024010101 3600 900 604800 tomorrow",
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -131,7 +161,7 @@ func TestIsKnownType(t *testing.T) {
 		{"TXT", true},
 		{"ptr", true},
 		{"SRV", false},
-		{"SOA", false},
+		{"soa", true},
 		{"", false},
 	}
 	for _, c := range cases {

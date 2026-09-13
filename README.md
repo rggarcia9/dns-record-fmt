@@ -18,7 +18,9 @@ name    TTL    CLASS    TYPE    VALUE
 - TTLs are converted to plain seconds (`1h` -> `3600`)
 - values are cleaned up per record type: domain names in CNAME/NS/PTR/MX
   get the same lowercase-and-dot treatment, TXT values are quoted exactly
-  once, A/AAAA addresses are lowercased
+  once, A/AAAA addresses are lowercased, and SOA records get their two
+  hostnames qualified and their refresh/retry/expire/minimum fields
+  converted to plain seconds (the serial number is left alone)
 
 ## Library usage
 
@@ -70,8 +72,8 @@ unchanged so comments in a copy-pasted zone file survive.
 ## Status
 
 Early. The parser covers the common single-line record shapes (A, AAAA,
-CNAME, MX, NS, TXT, PTR) but not multi-line SOA records or `$ORIGIN` /
-`$TTL` directives yet.
+CNAME, MX, NS, TXT, PTR, SOA) but not `$ORIGIN` / `$TTL` directives or
+multi-line records with parenthesis continuation yet.
 
 ## License
 

@@ -53,6 +53,17 @@ func TestParseLine(t *testing.T) {
 			in:   "example.com in A 192.0.2.1",
 			want: Record{Name: "example.com.", TTL: 0, Class: "IN", Type: "A", Value: "192.0.2.1"},
 		},
+		{
+			name: "soa value normalizes hosts and timing fields",
+			in:   "example.com 3600 SOA NS1.Example.com. Admin.Example.com. 2024010101 1h 30m 604800 1d",
+			want: Record{
+				Name:  "example.com.",
+				TTL:   3600,
+				Class: "IN",
+				Type:  "SOA",
+				Value: "ns1.example.com. admin.example.com. 2024010101 3600 1800 604800 86400",
+			},
+		},
 	}
 
 	for _, c := range cases {

@@ -11,7 +11,7 @@ import (
 // just not value cleanup.
 var knownTypes = map[string]bool{
 	"A": true, "AAAA": true, "CNAME": true, "MX": true,
-	"NS": true, "TXT": true, "PTR": true,
+	"NS": true, "TXT": true, "PTR": true, "SOA": true,
 }
 
 // NormalizeName lowercases a hostname and ensures it ends with a trailing
@@ -91,6 +91,8 @@ func NormalizeValue(recordType, value string) string {
 		return normalizeMX(value)
 	case "TXT":
 		return normalizeTXT(value)
+	case "SOA":
+		return normalizeSOA(value)
 	case "A", "AAAA":
 		return strings.ToLower(value)
 	default:
@@ -123,6 +125,38 @@ func normalizeTXT(value string) string {
 		unquoted = unquoted[1 : len(unquoted)-1]
 	}
 	return `"` + unquoted + `"`
+}
+
+// normalizeSOA expects the seven whitespace-separated SOA fields --
+// primary nameserver, responsible-party mailbox, serial, refresh, retry,
+// expire, minimum -- and normalizes the two domain names plus the four
+// timing fields, which accept the same unit suffixes as a TTL. The serial
+// number is left as a plain integer since it's an opaque counter, not a
+// duration. If the value doesn't have exactly seven fields, or any of
+// them don't parse, it's returned unchanged rather than guessed at.
+func normalizeSOA(value string) string {
+	fields := strings.Fields(value)
+	if len(fields) != 7 {
+		return value
+	}
+
+	mname, rname, serial := fields[0], fields[1], fields[2]
+	if n, err := strconv.Atoi(serial); err != nil || n < 0 {
+		return value
+	}
+
+	timings := make([]string, len(fields)-3)
+	for i, raw := range fields[3:] {
+		ttl, err := NormalizeTTL(raw)
+		if err != nil {
+			return value
+		}
+		timings[i] = strconv.Itoa(ttl)
+	}
+
+	out := []string{NormalizeName(mname), NormalizeName(rname), serial}
+	out = append(out, timings...)
+	return strings.Join(out, " ")
 }
 
 // IsKnownType reports whether NormalizeValue has type-specific handling
