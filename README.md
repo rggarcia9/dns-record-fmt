@@ -69,10 +69,26 @@ example.com.	IN	MX	10 mail.example.com.
 Lines that are blank, or start with `#` or `;`, are passed through
 unchanged so comments in a copy-pasted zone file survive.
 
+`$ORIGIN` and `$TTL` directives are tracked as the file is read and
+applied to the records that follow, the same way a real zone file does:
+
+```
+$ printf '$ORIGIN example.com.\n$TTL 3600\nwww A 192.0.2.1\nmail 60 IN MX 10 mail\n@ NS ns1\n' | go run ./cmd/dnsfmt
+$ORIGIN example.com.
+$TTL 3600
+www.example.com.	3600	IN	A	192.0.2.1
+mail.example.com.	60	IN	MX	10 mail.example.com.
+example.com.	3600	IN	NS	ns1.example.com.
+```
+
+A name of `@` refers to the origin itself, and any name without a
+trailing dot is qualified against the most recent `$ORIGIN` rather than
+the zone root.
+
 ## Status
 
 Early. The parser covers the common single-line record shapes (A, AAAA,
-CNAME, MX, NS, TXT, PTR, SOA) but not `$ORIGIN` / `$TTL` directives or
+CNAME, MX, NS, TXT, PTR, SOA) and `$ORIGIN` / `$TTL` directives, but not
 multi-line records with parenthesis continuation yet.
 
 ## License

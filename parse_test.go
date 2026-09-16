@@ -98,6 +98,120 @@ func TestParseLineErrors(t *testing.T) {
 	}
 }
 
+func TestParseRecordLineWithOrigin(t *testing.T) {
+	cases := []struct {
+		name       string
+		in         string
+		origin     string
+		defaultTTL int
+		want       Record
+	}{
+		{
+			name:       "relative name qualified against origin",
+			in:         "www A 192.0.2.1",
+			origin:     "example.com.",
+			defaultTTL: 0,
+			want:       Record{Name: "www.example.com.", TTL: 0, Class: "IN", Type: "A", Value: "192.0.2.1"},
+		},
+		{
+			name:       "at-sign resolves to the origin",
+			in:         "@ MX 10 mail",
+			origin:     "example.com.",
+			defaultTTL: 0,
+			want:       Record{Name: "example.com.", TTL: 0, Class: "IN", Type: "MX", Value: "10 mail.example.com."},
+		},
+		{
+			name:       "absolute name ignores the origin",
+			in:         "www.other.com. A 192.0.2.1",
+			origin:     "example.com.",
+			defaultTTL: 0,
+			want:       Record{Name: "www.other.com.", TTL: 0, Class: "IN", Type: "A", Value: "192.0.2.1"},
+		},
+		{
+			name:       "missing ttl falls back to defaultTTL",
+			in:         "www A 192.0.2.1",
+			origin:     "example.com.",
+			defaultTTL: 3600,
+			want:       Record{Name: "www.example.com.", TTL: 3600, Class: "IN", Type: "A", Value: "192.0.2.1"},
+		},
+		{
+			name:       "explicit ttl overrides defaultTTL",
+			in:         "www 60 A 192.0.2.1",
+			origin:     "example.com.",
+			defaultTTL: 3600,
+			want:       Record{Name: "www.example.com.", TTL: 60, Class: "IN", Type: "A", Value: "192.0.2.1"},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := ParseRecordLine(c.in, c.origin, c.defaultTTL)
+			if err != nil {
+				t.Fatalf("ParseRecordLine(%q, %q, %d) returned unexpected error: %v", c.in, c.origin, c.defaultTTL, err)
+			}
+			if got != c.want {
+				t.Errorf("ParseRecordLine(%q, %q, %d) = %+v, want %+v", c.in, c.origin, c.defaultTTL, got, c.want)
+			}
+		})
+	}
+}
+
+func TestParseOrigin(t *testing.T) {
+	cases := []struct {
+		name       string
+		in         string
+		wantOrigin string
+		wantOK     bool
+	}{
+		{"parses origin directive", "$ORIGIN example.com.", "example.com.", true},
+		{"lowercase directive keyword", "$origin Example.COM", "example.com.", true},
+		{"adds missing trailing dot", "$ORIGIN example.com", "example.com.", true},
+		{"not a directive", "example.com A 192.0.2.1", "", false},
+		{"wrong field count", "$ORIGIN", "", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			gotOrigin, gotOK := ParseOrigin(c.in)
+			if gotOK != c.wantOK || gotOrigin != c.wantOrigin {
+				t.Errorf("ParseOrigin(%q) = %q, %v, want %q, %v", c.in, gotOrigin, gotOK, c.wantOrigin, c.wantOK)
+			}
+		})
+	}
+}
+
+func TestParseTTLDirective(t *testing.T) {
+	cases := []struct {
+		name    string
+		in      string
+		wantTTL int
+		wantOK  bool
+		wantErr bool
+	}{
+		{"parses ttl directive", "$TTL 3600", 3600, true, false},
+		{"lowercase directive keyword", "$ttl 1h", 3600, true, false},
+		{"not a directive", "example.com A 192.0.2.1", 0, false, false},
+		{"wrong field count", "$TTL", 0, false, false},
+		{"malformed value is an error", "$TTL abc", 0, true, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			gotTTL, gotOK, err := ParseTTLDirective(c.in)
+			if c.wantErr {
+				if err == nil {
+					t.Errorf("ParseTTLDirective(%q) returned nil error, want an error", c.in)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ParseTTLDirective(%q) returned unexpected error: %v", c.in, err)
+			}
+			if gotOK != c.wantOK || gotTTL != c.wantTTL {
+				t.Errorf("ParseTTLDirective(%q) = %d, %v, want %d, %v", c.in, gotTTL, gotOK, c.wantTTL, c.wantOK)
+			}
+		})
+	}
+}
+
 func TestParseLineRoundTripsThroughString(t *testing.T) {
 	in := "Www.Example.com 1h CNAME Origin.Example.NET"
 	want := "www.example.com.\t3600\tIN\tCNAME\torigin.example.net."

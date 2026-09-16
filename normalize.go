@@ -15,13 +15,31 @@ var knownTypes = map[string]bool{
 }
 
 // NormalizeName lowercases a hostname and ensures it ends with a trailing
-// dot, the fully-qualified form zone files expect.
+// dot, the fully-qualified form zone files expect. Relative names are
+// qualified against the root, i.e. it behaves like QualifyName(name, ".").
+// Use QualifyName directly when a $ORIGIN directive is in effect.
 func NormalizeName(name string) string {
+	return QualifyName(name, ".")
+}
+
+// QualifyName lowercases a hostname and makes it fully qualified against
+// origin, the way a zone file resolves names relative to the current
+// $ORIGIN. A name that already ends in a dot is treated as absolute and
+// returned as-is (lowercased). The bare name "@" means the origin itself.
+// origin is expected to already be fully qualified (trailing dot); pass
+// "." for the root when no $ORIGIN is in effect.
+func QualifyName(name, origin string) string {
 	name = strings.ToLower(strings.TrimSpace(name))
 	if name == "" || strings.HasSuffix(name, ".") {
 		return name
 	}
-	return name + "."
+	if name == "@" {
+		return origin
+	}
+	if origin == "" || origin == "." {
+		return name + "."
+	}
+	return name + "." + origin
 }
 
 // NormalizeType uppercases a record type, e.g. "cname" -> "CNAME".
@@ -80,19 +98,28 @@ func NormalizeTTL(raw string) (int, error) {
 // Domain-valued types get the same lowercase-and-dot treatment as
 // NormalizeName; TXT values are wrapped in quotes exactly once; A/AAAA
 // are lowercased (IPv6 hex can be mixed case); anything else is trimmed
-// and passed through as-is.
+// and passed through as-is. Relative domain names in the value are
+// qualified against the root; use NormalizeValueWithOrigin when a
+// $ORIGIN directive is in effect.
 func NormalizeValue(recordType, value string) string {
+	return NormalizeValueWithOrigin(recordType, value, ".")
+}
+
+// NormalizeValueWithOrigin is NormalizeValue, but relative domain names
+// in the value (a bare CNAME/NS/PTR target, an MX host, or an SOA
+// hostname) are qualified against origin instead of the root.
+func NormalizeValueWithOrigin(recordType, value, origin string) string {
 	value = strings.TrimSpace(value)
 
 	switch NormalizeType(recordType) {
 	case "CNAME", "NS", "PTR":
-		return NormalizeName(value)
+		return QualifyName(value, origin)
 	case "MX":
-		return normalizeMX(value)
+		return normalizeMX(value, origin)
 	case "TXT":
 		return normalizeTXT(value)
 	case "SOA":
-		return normalizeSOA(value)
+		return normalizeSOA(value, origin)
 	case "A", "AAAA":
 		return strings.ToLower(value)
 	default:
@@ -104,7 +131,7 @@ func NormalizeValue(recordType, value string) string {
 // normalized, e.g. "10  Mail.Example.com" -> "10 mail.example.com.". If
 // the value doesn't match that shape it's returned unchanged rather than
 // guessed at.
-func normalizeMX(value string) string {
+func normalizeMX(value, origin string) string {
 	fields := strings.Fields(value)
 	if len(fields) != 2 {
 		return value
@@ -113,7 +140,7 @@ func normalizeMX(value string) string {
 	if _, err := strconv.Atoi(priority); err != nil {
 		return value
 	}
-	return priority + " " + NormalizeName(host)
+	return priority + " " + QualifyName(host, origin)
 }
 
 // normalizeTXT ensures the value is wrapped in double quotes exactly
@@ -134,7 +161,7 @@ func normalizeTXT(value string) string {
 // number is left as a plain integer since it's an opaque counter, not a
 // duration. If the value doesn't have exactly seven fields, or any of
 // them don't parse, it's returned unchanged rather than guessed at.
-func normalizeSOA(value string) string {
+func normalizeSOA(value, origin string) string {
 	fields := strings.Fields(value)
 	if len(fields) != 7 {
 		return value
@@ -154,7 +181,7 @@ func normalizeSOA(value string) string {
 		timings[i] = strconv.Itoa(ttl)
 	}
 
-	out := []string{NormalizeName(mname), NormalizeName(rname), serial}
+	out := []string{QualifyName(mname, origin), QualifyName(rname, origin), serial}
 	out = append(out, timings...)
 	return strings.Join(out, " ")
 }

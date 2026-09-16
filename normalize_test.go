@@ -23,6 +23,56 @@ func TestNormalizeName(t *testing.T) {
 	}
 }
 
+func TestQualifyName(t *testing.T) {
+	cases := []struct {
+		name   string
+		in     string
+		origin string
+		want   string
+	}{
+		{"relative name qualified against origin", "www", "example.com.", "www.example.com."},
+		{"already absolute name is untouched", "www.other.com.", "example.com.", "www.other.com."},
+		{"at-sign resolves to the origin itself", "@", "example.com.", "example.com."},
+		{"root origin behaves like NormalizeName", "Www.Example.COM", ".", "www.example.com."},
+		{"empty origin behaves like root", "www", "", "www."},
+		{"empty name stays empty", "", "example.com.", ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := QualifyName(c.in, c.origin); got != c.want {
+				t.Errorf("QualifyName(%q, %q) = %q, want %q", c.in, c.origin, got, c.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeValueWithOrigin(t *testing.T) {
+	cases := []struct {
+		name       string
+		recordType string
+		in         string
+		origin     string
+		want       string
+	}{
+		{"CNAME relative target qualified against origin", "CNAME", "www", "example.com.", "www.example.com."},
+		{"MX relative host qualified against origin", "MX", "10 mail", "example.com.", "10 mail.example.com."},
+		{
+			"SOA relative hosts qualified against origin",
+			"SOA",
+			"ns1 admin 2024010101 3600 900 604800 86400",
+			"example.com.",
+			"ns1.example.com. admin.example.com. 2024010101 3600 900 604800 86400",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := NormalizeValueWithOrigin(c.recordType, c.in, c.origin); got != c.want {
+				t.Errorf("NormalizeValueWithOrigin(%q, %q, %q) = %q, want %q", c.recordType, c.in, c.origin, got, c.want)
+			}
+		})
+	}
+}
+
 func TestNormalizeType(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"cname", "CNAME"},
