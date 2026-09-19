@@ -85,11 +85,22 @@ A name of `@` refers to the origin itself, and any name without a
 trailing dot is qualified against the most recent `$ORIGIN` rather than
 the zone root.
 
+A record can also span multiple lines using parenthesis continuation,
+the way SOA records are usually written by hand:
+
+```
+$ printf 'example.com. 3600 IN SOA ns1.example.com. admin.example.com. (\n    2024010101 ; serial\n    3600       ; refresh\n    900        ; retry\n    604800     ; expire\n    86400 )    ; minimum\n' | go run ./cmd/dnsfmt
+example.com.	3600	IN	SOA	ns1.example.com. admin.example.com. 2024010101 3600 900 604800 86400
+```
+
+A `(` that's never closed by end of input is reported as an error rather
+than silently dropped.
+
 ## Status
 
-Early. The parser covers the common single-line record shapes (A, AAAA,
-CNAME, MX, NS, TXT, PTR, SOA) and `$ORIGIN` / `$TTL` directives, but not
-multi-line records with parenthesis continuation yet.
+Early. The parser covers the common single-line and parenthesis-continued
+record shapes (A, AAAA, CNAME, MX, NS, TXT, PTR, SOA) and `$ORIGIN` /
+`$TTL` directives.
 
 ## License
 

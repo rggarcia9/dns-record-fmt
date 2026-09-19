@@ -2,7 +2,8 @@
 // their normalized form to stdout. Blank lines and lines starting with
 // "#" or ";" are passed through unchanged. $ORIGIN and $TTL directives
 // are tracked and applied to the records that follow them, matching how
-// a real zone file resolves relative names and default TTLs.
+// a real zone file resolves relative names and default TTLs. A record
+// may also span multiple lines using parenthesis continuation.
 package main
 
 import (
@@ -20,9 +21,13 @@ func main() {
 
 	origin := "."
 	defaultTTL := 0
+	var joiner dnsfmt.LineJoiner
 
 	for scanner.Scan() {
-		line := scanner.Text()
+		line, ok := joiner.Feed(scanner.Text())
+		if !ok {
+			continue
+		}
 		trimmed := strings.TrimSpace(line)
 
 		if trimmed == "" || strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, ";") {
@@ -59,6 +64,10 @@ func main() {
 	if err := scanner.Err(); err != nil {
 		fmt.Fprintf(os.Stderr, "dnsfmt: reading input: %v\n", err)
 		os.Exit(1)
+	}
+	if joiner.Pending() {
+		fmt.Fprintln(os.Stderr, "dnsfmt: reached end of input with an unclosed \"(\"")
+		exitCode = 1
 	}
 	os.Exit(exitCode)
 }
