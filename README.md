@@ -96,6 +96,25 @@ example.com.	3600	IN	SOA	ns1.example.com. admin.example.com. 2024010101 3600 900
 A `(` that's never closed by end of input is reported as an error rather
 than silently dropped.
 
+### Comparing two zone files
+
+`-diff` normalizes two zone files and prints the differences between the
+results, so two exports of "the same" zone from different sources (a
+registrar UI vs. an AXFR dump, say) can be compared without every
+formatting quirk showing up as a change:
+
+```
+$ dnsfmt -diff before.zone after.zone
+ www.example.com.	3600	IN	A	192.0.2.1
+-mail.example.com.	3600	IN	MX	10 mail.example.com.
++mail.example.com.	3600	IN	MX	20 mail2.example.com.
+```
+
+Lines are prefixed the way `diff` prefixes them: a leading space for a
+line present in both files, `-` for a line only in the first, `+` for a
+line only in the second. The exit code is 0 if the normalized files are
+identical, 1 if they differ, and 2 on a usage or parse error.
+
 ## Status
 
 Early. The parser covers the common single-line and parenthesis-continued
